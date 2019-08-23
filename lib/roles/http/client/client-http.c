@@ -112,6 +112,7 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 		} lws_end_foreach_dll_safe(d, d1);
 
 		if (wfound) {
+			wfound->detlat.earliest_write_req_pre_write = lws_now_usecs();
 			/*
 			 * pollfd has the master sockfd in it... we
 			 * need to use that in HANDSHAKE2 to understand
@@ -137,12 +138,17 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 
 	switch (lwsi_state(wsi)) {
 
+	case LRS_WAITING_ASYNC_DNS:
+		lwsl_notice("LRS_WAITING_ASYNC_DNS\n");
+		return 0;
+
 	case LRS_WAITING_CONNECT:
 
 		/*
 		 * we are under PENDING_TIMEOUT_SENT_CLIENT_HANDSHAKE
 		 * timeout protection set in client-handshake.c
 		 */
+		lwsl_notice("LRS_WAITING_CONNECT\n");
 
 		if (!lws_client_connect_3(wsi, NULL, NULL, LADNS_RET_FOUND)) {
 			/* closed */
@@ -358,6 +364,16 @@ start_ws_handshake:
 		} else
 			wsi->tls.ssl = NULL;
 #endif
+#if defined(LWS_WITH_DETAILED_LATENCY)
+		if (context->detailed_latency_cb) {
+			wsi->detlat.type = LDLT_TLS_NEG_CLIENT;
+			wsi->detlat.latencies[LAT_DUR_PROXY_CLIENT_REQ_TO_WRITE] =
+				lws_now_usecs() -
+				wsi->detlat.earliest_write_req_pre_write;
+			wsi->detlat.latencies[LAT_DUR_USERCB] = 0;
+			lws_det_lat_cb(wsi->context, &wsi->detlat);
+		}
+#endif
 #if defined (LWS_WITH_HTTP2)
 		if (wsi->client_h2_alpn) {
 			/*
@@ -400,7 +416,6 @@ start_ws_handshake:
 		}
 
 		/* send our request to the server */
-		lws_latency_pre(context, wsi);
 
 		w = _lws_client_wsi_master(wsi);
 		lwsl_info("%s: HANDSHAKE2: %p: sending headers on %p "
@@ -409,9 +424,9 @@ start_ws_handshake:
 			  (unsigned long)w->wsistate, w->desc.sockfd,
 			  wsi->desc.sockfd);
 
+		wsi->detlat.earliest_write_req_pre_write = lws_now_usecs();
+
 		n = lws_ssl_capable_write(w, (unsigned char *)sb, (int)(p - sb));
-		lws_latency(context, wsi, "send lws_issue_raw", n,
-			    n == p - sb);
 		switch (n) {
 		case LWS_SSL_CAPABLE_ERROR:
 			lwsl_debug("ERROR writing to client socket\n");
@@ -529,8 +544,6 @@ client_http_body_sent:
 			int plen = 1;
 
 			n = lws_ssl_capable_read(wsi, &c, 1);
-			lws_latency(context, wsi, "send lws_issue_raw", n,
-				    n == 1);
 			switch (n) {
 			case 0:
 			case LWS_SSL_CAPABLE_ERROR:

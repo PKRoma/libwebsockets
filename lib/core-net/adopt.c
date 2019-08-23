@@ -72,6 +72,11 @@ lws_create_new_server_wsi(struct lws_vhost *vhost, int fixed_tsi)
 	new_wsi->pending_timeout = NO_PENDING_TIMEOUT;
 	new_wsi->rxflow_change_to = LWS_RXFLOW_ALLOW;
 
+#if defined(LWS_WITH_DETAILED_LATENCY)
+	if (vhost->context->detailed_latency_cb)
+		new_wsi->detlat.earliest_write_req_pre_write = lws_now_usecs();
+#endif
+
 	/* initialize the instance struct */
 
 	lwsi_set_state(new_wsi, LRS_UNCONNECTED);

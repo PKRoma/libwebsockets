@@ -87,6 +87,7 @@ enum lwsi_state {
 	/* Phase 1: pre-transport */
 
 	LRS_UNCONNECTED				= LWSIFS_NOT_EST | 0,
+	LRS_WAITING_ASYNC_DNS			= LWSIFS_NOT_EST | 32,
 	LRS_WAITING_CONNECT			= LWSIFS_NOT_EST | 1,
 
 	/* Phase 2: establishing intermediaries on top of transport */

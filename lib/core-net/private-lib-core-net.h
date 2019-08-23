@@ -326,6 +326,7 @@ typedef enum dns_query_type {
 } adns_query_type_t;
 
 typedef enum {
+	LADNS_RET_FAILED_WSI_CLOSED			= -4,
 	LADNS_RET_NXDOMAIN				= -3,
 	LADNS_RET_TIMEDOUT				= -2,
 	LADNS_RET_FAILED				= -1,
@@ -437,6 +438,10 @@ struct lws_context_per_thread {
 	struct lws_signal_watcher w_sigint;
 #endif
 
+#if defined(LWS_WITH_DETAILED_LATENCY)
+	lws_usec_t	ust_left_poll;
+#endif
+
 	/* --- */
 
 	unsigned long count_conns;
@@ -489,7 +494,6 @@ struct lws_conn_stats {
  *
  *    SSL SNI -> wsi -> bind after SSL negotiation
  */
-
 
 struct lws_vhost {
 #if defined(LWS_WITH_CLIENT) && defined(LWS_CLIENT_HTTP_PROXYING)
@@ -586,6 +590,10 @@ struct lws_vhost {
 
 void
 __lws_vhost_destroy2(struct lws_vhost *vh);
+
+/*
+ * struct lws
+ */
 
 struct lws {
 	/* structs */
