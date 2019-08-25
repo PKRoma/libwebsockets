@@ -55,6 +55,7 @@ gai_strerror(int);
 
 #if defined(LWS_AMAZON_RTOS)
  #include "FreeRTOS.h"
+ #include "FreeRTOS_IP.h"
  #include "timers.h"
  #include <esp_attr.h>
 #else
