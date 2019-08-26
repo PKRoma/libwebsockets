@@ -95,7 +95,9 @@ lws_finalize_write_http_header(struct lws *wsi, unsigned char *start,
 	p = *pp;
 	len = lws_ptr_diff(p, start);
 
-	wsi->detlat.earliest_write_req_pre_write = 0;
+#if defined(LWS_WITH_DETAILED_LATENCY)
+	wsi->detlat.earliest_write_req_pre_write = lws_now_usecs();
+#endif
 	if (lws_write(wsi, start, len, LWS_WRITE_HTTP_HEADERS) != len)
 		return 1;
 
@@ -447,7 +449,9 @@ lws_return_http_status(struct lws *wsi, unsigned int code,
 		 *
 		 * Solve it by writing the headers now...
 		 */
-		wsi->detlat.earliest_write_req_pre_write = 0;
+#if defined(LWS_WITH_DETAILED_LATENCY)
+		wsi->detlat.earliest_write_req_pre_write = lws_now_usecs();
+#endif
 		m = lws_write(wsi, start, lws_ptr_diff(p, start),
 			      LWS_WRITE_HTTP_HEADERS);
 		if (m != lws_ptr_diff(p, start))
@@ -515,7 +519,6 @@ lws_http_redirect(struct lws *wsi, int code, const unsigned char *loc, int len,
 	if (lws_finalize_http_header(wsi, p, end))
 		return -1;
 
-	wsi->detlat.earliest_write_req_pre_write = 0;
 	return lws_write(wsi, start, *p - start, LWS_WRITE_HTTP_HEADERS |
 						 LWS_WRITE_H2_STREAM_END);
 }

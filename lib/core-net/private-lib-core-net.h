@@ -1216,6 +1216,9 @@ extern const struct lws_protocols protocol_abs_client_raw_skt,
 				  protocol_abs_client_unit_test;
 
 void
+__lws_reset_wsi(struct lws *wsi);
+
+void
 lws_inform_client_conn_fail(struct lws *wsi, void *arg, size_t len);
 
 #if defined(LWS_WITH_ASYNC_DNS)

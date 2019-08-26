@@ -123,6 +123,7 @@ _lws_destroy_ah(struct lws_context_per_thread *pt, struct allocated_headers *ah)
 void
 _lws_header_table_reset(struct allocated_headers *ah)
 {
+	assert(ah);
 	/* init the ah to reflect no headers or data have appeared yet */
 	memset(ah->frag_index, 0, sizeof(ah->frag_index));
 	memset(ah->frags, 0, sizeof(ah->frags));

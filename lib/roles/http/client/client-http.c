@@ -112,7 +112,9 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 		} lws_end_foreach_dll_safe(d, d1);
 
 		if (wfound) {
+#if defined(LWS_WITH_DETAILED_LATENCY)
 			wfound->detlat.earliest_write_req_pre_write = lws_now_usecs();
+#endif
 			/*
 			 * pollfd has the master sockfd in it... we
 			 * need to use that in HANDSHAKE2 to understand
@@ -424,7 +426,9 @@ start_ws_handshake:
 			  (unsigned long)w->wsistate, w->desc.sockfd,
 			  wsi->desc.sockfd);
 
+#if defined(LWS_WITH_DETAILED_LATENCY)
 		wsi->detlat.earliest_write_req_pre_write = lws_now_usecs();
+#endif
 
 		n = lws_ssl_capable_write(w, (unsigned char *)sb, (int)(p - sb));
 		switch (n) {
@@ -874,6 +878,7 @@ lws_client_interpret_server_handshake(struct lws *wsi)
 			if (wsi)
 				goto bail3;
 
+			/* wsi has closed */
 			return 1;
 		}
 		return 0;
