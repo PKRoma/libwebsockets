@@ -247,6 +247,17 @@ lws_client_connect_3(struct lws *wsi, const char *ads,
 	int port;
 	ssize_t plen = 0;
 
+	if (lwsi_state(wsi) == LRS_WAITING_CONNECT) {
+		socklen_t sl = sizeof(int);
+		int e = 0;
+
+		if (!getsockopt(wsi->desc.sockfd, SOL_SOCKET, SO_ERROR, &e, &sl))
+			if (!e)
+				goto conn_good;
+		cce = "connection failed";
+		goto oom4;
+	}
+
 #if defined(LWS_WITH_UNIX_SOCK)
 	if (*ads == '+') {
 		ads++;

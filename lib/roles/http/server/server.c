@@ -181,7 +181,8 @@ done_list:
 			sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
 		if (sockfd == LWS_SOCK_INVALID) {
-			lwsl_err("ERROR opening socket\n");
+			lwsl_err("%s: ERROR opening socket: errno %d\n",
+					__func__, LWS_ERRNO);
 			return 1;
 		}
 #if !defined(LWS_PLAT_FREERTOS)

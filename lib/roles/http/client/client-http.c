@@ -144,7 +144,7 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 		 * timeout protection set in client-handshake.c
 		 */
 
-		if (!lws_client_connect_2(wsi)) {
+		if (!lws_client_connect_3(wsi, NULL, NULL, LADNS_RET_FOUND)) {
 			/* closed */
 			lwsl_client("closed\n");
 			return -1;

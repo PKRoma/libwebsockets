@@ -42,7 +42,7 @@
 #define	DNS_QUERY_TIMEOUT	30	/* Query timeout, seconds	*/
 
 typedef struct {
-	uint8_t			addr[DNS_MAX];
+	uint8_t			addr[96];
 	lws_sorted_usec_list_t	sul;
 	lws_dll2_t		list;
 	lws_dll2_owner_t	wsi_adns;
@@ -64,6 +64,22 @@ struct header {
 	uint16_t		nauth;
 	uint16_t		nother;
 	uint8_t			data[1];
+};
+
+static const struct sockaddr sa;
+
+static struct canned_q {
+	lws_adns_q_t		q;
+	char			n[16];
+} q_localhost = {
+	{
+		.addr		= { 127, 0, 0, 1 },
+		.addrlen	= sizeof(sa.sa_data),
+		.ret		= LADNS_RET_FOUND,
+		.qtype		= LWS_ADNS_RECORD_A,
+		.sent		= 1
+	},
+	.n			= "localhost"
 };
 
 
@@ -101,7 +117,7 @@ lws_adns_get_query(lws_async_dns_t *dns, adns_query_type_t qtype,
 	return NULL;
 }
 
-static void
+static int
 lws_async_dns_done(lws_adns_q_t *q, struct lws *wsi, lws_async_dns_retcode_t r)
 {
 	struct addrinfo ai, *rai = NULL;
@@ -130,19 +146,16 @@ lws_async_dns_done(lws_adns_q_t *q, struct lws *wsi, lws_async_dns_retcode_t r)
 		memcpy(&sai.sin_addr, q->addr, sizeof(sai.sin_addr));
 		ai.ai_canonname = (char *)&q[1];
 
-		lwsl_info("%s: result %d, %d.%d.%d.%d\n", __func__, r,
-			      (uint8_t)(sai.sin_addr.s_addr >> 24),
-			      (uint8_t)(sai.sin_addr.s_addr >> 16),
+		lwsl_notice("%s: result %d, %d.%d.%d.%d\n", __func__, r,
+			      (uint8_t)sai.sin_addr.s_addr,
 			      (uint8_t)(sai.sin_addr.s_addr >> 8),
-			      (uint8_t)sai.sin_addr.s_addr);
+			      (uint8_t)(sai.sin_addr.s_addr >> 16),
+			      (uint8_t)(sai.sin_addr.s_addr >> 24));
 	} else
 		lwsl_info("%s: result %d\n", __func__, r);
 
-	if (wsi) {
-		lws_client_connect_3(wsi, (const char*)&q[1], rai, n);
-
-		return;
-	}
+	if (wsi)
+		return !lws_client_connect_3(wsi, (const char*)&q[1], rai, n);
 
 	/* inform all of the parent wsi that were interested in us */
 
@@ -150,9 +163,11 @@ lws_async_dns_done(lws_adns_q_t *q, struct lws *wsi, lws_async_dns_retcode_t r)
 				   lws_dll2_get_head(&q->wsi_adns)) {
 		struct lws *w = lws_container_of(d, struct lws, adns);
 
-		lws_client_connect_3(w, (const char*)&q[1], rai, n);
 		lws_dll2_remove(d);
+		lws_client_connect_3(w, (const char*)&q[1], rai, n);
 	} lws_end_foreach_dll_safe(d, d1);
+
+	return 0;
 }
 
 static void
@@ -311,7 +326,7 @@ parse_udp(lws_async_dns_t *dns, const uint8_t *pkt, int len)
 	if (q->addrlen > sizeof(q->addr))
 		q->addrlen = sizeof(q->addr);
 
-	memcpy(q->addr, p, q->addrlen);
+	memcpy(&q->addr, p, q->addrlen);
 
 	ret = LADNS_RET_FOUND;
 
@@ -554,6 +569,12 @@ lws_async_dns_query(struct lws *wsi, const char *name, adns_query_type_t qtype)
 		return LADNS_RET_FOUND;
 	}
 
+	if (!strcmp(name, q_localhost.n)) {
+		if (lws_async_dns_done(&q_localhost.q, wsi, LADNS_RET_FOUND))
+			return LADNS_RET_FAILED_WSI_CLOSED;
+		return LADNS_RET_FOUND;
+	}
+
 	if (!wsi->context->async_dns.dns_server_set &&
 	    lws_async_dns_init(wsi->context))
 		return LADNS_RET_FAILED;
@@ -563,7 +584,8 @@ lws_async_dns_query(struct lws *wsi, const char *name, adns_query_type_t qtype)
 	q = lws_adns_get_query(dns, qtype, &dns->cached, 0, name);
 	if (q) {
 		lwsl_debug("%s: reusing cached result\n", __func__);
-		lws_async_dns_done(q, wsi, q->ret);
+		if (lws_async_dns_done(q, wsi, q->ret))
+			return LADNS_RET_FAILED_WSI_CLOSED;
 		return LADNS_RET_FOUND;
 	}
 
@@ -579,6 +601,7 @@ lws_async_dns_query(struct lws *wsi, const char *name, adns_query_type_t qtype)
 	}
 
 	/* Allocate new query */
+
 	q = (lws_adns_q_t *)lws_zalloc(sizeof(*q) + nlen + 1, __func__);
 	if (!q) {
 		lws_client_connect_3(wsi, NULL, NULL, LADNS_RET_FAILED);
