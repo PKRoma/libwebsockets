@@ -76,10 +76,6 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 	char ebuf[128];
 #endif
 	const char *cce = NULL;
-#if defined(LWS_ROLE_H1) || defined(LWS_ROLE_H2)
-	ssize_t len = 0;
-	unsigned char c;
-#endif
 	char *sb = p;
 	int n = 0;
 #if defined(LWS_WITH_SOCKS5)
@@ -141,7 +137,6 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 	switch (lwsi_state(wsi)) {
 
 	case LRS_WAITING_ASYNC_DNS:
-		lwsl_notice("LRS_WAITING_ASYNC_DNS\n");
 		return 0;
 
 	case LRS_WAITING_CONNECT:
@@ -150,7 +145,6 @@ lws_client_socket_service(struct lws *wsi, struct lws_pollfd *pollfd,
 		 * we are under PENDING_TIMEOUT_SENT_CLIENT_HANDSHAKE
 		 * timeout protection set in client-handshake.c
 		 */
-		lwsl_notice("LRS_WAITING_CONNECT\n");
 
 		if (!lws_client_connect_3(wsi, NULL, NULL, LADNS_RET_FOUND)) {
 			/* closed */
@@ -542,12 +536,11 @@ client_http_body_sent:
 		 * in one packet, since at that point the connection is
 		 * definitively ready from browser pov.
 		 */
-		len = 1;
-		while (wsi->http.ah->parser_state != WSI_PARSING_COMPLETE &&
-		       len > 0) {
-			int plen = 1;
 
-			n = lws_ssl_capable_read(wsi, &c, 1);
+		while (wsi->http.ah->parser_state != WSI_PARSING_COMPLETE) {
+			int plen, n;
+
+			plen = n = lws_ssl_capable_read(wsi, &pt->serv_buf[0], 256);
 			switch (n) {
 			case 0:
 			case LWS_SSL_CAPABLE_ERROR:
@@ -557,10 +550,23 @@ client_http_body_sent:
 				return 0;
 			}
 
-			if (lws_parse(wsi, &c, &plen)) {
+			if (lws_parse(wsi, &pt->serv_buf[0], &n)) {
 				lwsl_warn("problems parsing header\n");
 				cce = "problems parsing header";
 				goto bail3;
+			}
+			if (n) {
+				assert(wsi->http.ah->parser_state ==
+						WSI_PARSING_COMPLETE);
+
+				if (lws_buflist_append_segment(&wsi->buflist,
+					  &pt->serv_buf[0] + plen - n, n) < 0) {
+					cce = "oom";
+					goto bail3;
+				}
+
+				lws_dll2_add_head(&wsi->dll_buflist,
+						  &pt->dll_buflist_owner);
 			}
 		}
 
